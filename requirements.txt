@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+chromadb
+transformers
+accelerate
+Pillow
+torch
+torchvision
+qwen-vl-utils
+pillow-heif
