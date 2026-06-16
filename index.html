@@ -170,13 +170,26 @@
 
     .card:hover { border-color: var(--border-hover); transform: translateY(-1px); }
 
+    .card-img-wrap { position: relative; width: 100%; aspect-ratio: 1; overflow: hidden; background: var(--surface-2); }
+
     .card img {
       width: 100%;
-      aspect-ratio: 1;
+      height: 100%;
       object-fit: cover;
       display: block;
-      background: var(--surface-2);
     }
+
+    .video-indicator {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .video-indicator svg { width: 14px; height: 14px; fill: currentColor; }
 
     .card-placeholder {
       width: 100%;
@@ -417,12 +430,21 @@ function renderResults(results, query) {
 
     const url   = thumbUrl(r.metadata);
     const score = Math.round(r.score * 100);
+    const isVideo = r.metadata.file_type === "video";
 
-    card.innerHTML = url
-      ? `<img src="${url}" alt="${r.metadata.filename}" loading="lazy" />`
-      : `<div class="card-placeholder"><svg viewBox="0 0 24 24" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
+    let content = `<div class="card-img-wrap">`;
+    if (url) {
+      content += `<img src="${url}" alt="${r.metadata.filename}" loading="lazy" />`;
+    } else {
+      content += `<div class="card-placeholder"><svg viewBox="0 0 24 24" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
+    }
+    
+    if (isVideo) {
+      content += `<div class="video-indicator"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>`;
+    }
+    content += `</div>`;
 
-    card.innerHTML += `
+    card.innerHTML = content + `
       <div class="card-info">
         <div class="card-name" title="${r.metadata.filename}">${r.metadata.filename}</div>
         <div class="card-score">${score}% match</div>
@@ -435,15 +457,28 @@ function renderResults(results, query) {
 }
 
 // ── Lightbox ──
-function openLightbox(r, url) {
-  document.getElementById("lb-img").src  = url || "";
+function openLightbox(r, thumbUrl) {
+  const wrap = document.querySelector(".lightbox-img-wrap");
+  const isVideo = r.metadata.file_type === "video";
+  const fullResUrl = `${API_BASE}/file?path=${encodeURIComponent(r.metadata.full_path)}`;
+
+  if (isVideo) {
+    wrap.innerHTML = `<video id="lb-video" src="${fullResUrl}" controls autoplay style="max-width:100%; max-height:60vh;"></video>`;
+  } else {
+    wrap.innerHTML = `<img id="lb-img" src="${fullResUrl}" alt="${r.metadata.filename}" style="max-width:100%; max-height:60vh; object-fit:contain;" />`;
+  }
+
   document.getElementById("lb-name").textContent  = r.metadata.filename;
   document.getElementById("lb-path").textContent  = r.metadata.full_path || r.id;
   document.getElementById("lb-score").textContent = `Similarity: ${Math.round(r.score * 100)}%`;
   lightbox.classList.add("open");
 }
 
-document.getElementById("lb-close").addEventListener("click", () => lightbox.classList.remove("open"));
+document.getElementById("lb-close").addEventListener("click", () => {
+  lightbox.classList.remove("open");
+  const wrap = document.querySelector(".lightbox-img-wrap");
+  wrap.innerHTML = ""; // Stop video playback
+});
 lightbox.addEventListener("click", e => { if (e.target === lightbox) lightbox.classList.remove("open"); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") lightbox.classList.remove("open"); });
 

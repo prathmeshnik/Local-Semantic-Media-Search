@@ -8,3 +8,4 @@ torch
 torchvision
 qwen-vl-utils
 pillow-heif
+opencv-python

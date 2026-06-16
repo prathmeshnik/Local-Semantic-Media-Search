@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -8,6 +8,7 @@ from transformers import AutoModel, AutoTokenizer
 import chromadb
 import uvicorn
 import os
+import mimetypes
 
 from embedding_utils import Qwen3VLEmbedder
 
@@ -101,6 +102,14 @@ async def search(q: str = Query(..., description="The semantic search query"),
     
     results = engine.search(q, top_k=limit)
     return {"results": results}
+
+@app.get("/file")
+async def get_file(path: str = Query(..., description="Full path to the image or video")):
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    mime_type, _ = mimetypes.guess_type(path)
+    return FileResponse(path, media_type=mime_type)
 
 @app.get("/health")
 async def health():

@@ -46,3 +46,4 @@ image-db/
 3. **Start Search:** Launch `api.py` and query via REST.
 
 ---
+*For a deep dive into the architecture and implementation details, see [GEMINI.md](./GEMINI.md).*

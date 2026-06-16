@@ -6,6 +6,7 @@ import torch
 import chromadb
 from tqdm import tqdm
 import hashlib
+import cv2
 from pillow_heif import register_heif_opener
 
 from embedding_utils import Qwen3VLEmbedder
@@ -17,6 +18,8 @@ register_heif_opener()
 DB_PATH = "./.db"
 THUMBNAIL_PATH = "./.cache/thumbnails"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif", ".tiff", ".tif"}
+VIDEO_EXTS = {".mp4", ".mov", ".avi", ".webm", ".mkv"}
+SUPPORTED_EXTS = IMAGE_EXTS | VIDEO_EXTS
 MODEL_ID = "./model"
 
 def get_device():
@@ -65,14 +68,45 @@ class ImageIndexer:
         
         return str(thumb_file)
 
+    def extract_video_frame(self, video_path):
+        """Extracts a frame at ~10% of the video duration."""
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            return None
+        
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # Seek to 10% to avoid potentially black starting frames
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_count * 0.1))
+        
+        success, frame = cap.read()
+        cap.release()
+        
+        if success:
+            # Convert BGR to RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            return Image.fromarray(frame_rgb)
+        return None
+
     def index(self, batch_size=8):
-        print(f"Scanning {self.vault_path} for images...")
+        print(f"Scanning {self.vault_path} for files...")
         all_files = []
-        for ext in IMAGE_EXTS:
+        for ext in SUPPORTED_EXTS:
             all_files.extend(self.vault_path.rglob(f"*{ext}"))
         
-        existing_ids = set(self.collection.get(include=[])["ids"])
-        to_index = [f for f in all_files if self.get_relative_path(f) not in existing_ids]
+        # Get existing IDs and their mtimes
+        existing_data = self.collection.get(include=["metadatas"])
+        existing_mtimes = {
+            id: meta.get("mtime", 0.0) 
+            for id, meta in zip(existing_data["ids"], existing_data["metadatas"])
+        }
+
+        to_index = []
+        for fpath in all_files:
+            rel_path = self.get_relative_path(fpath)
+            current_mtime = fpath.stat().st_mtime
+            
+            if rel_path not in existing_mtimes or current_mtime > existing_mtimes[rel_path]:
+                to_index.append(fpath)
 
         if not to_index:
             print("No new images to index.")
@@ -89,9 +123,17 @@ class ImageIndexer:
             for fpath in batch_files:
                 try:
                     rel_path = self.get_relative_path(fpath)
-                    img = Image.open(fpath)
-                    img.load() 
-                    img = img.convert("RGB")
+                    is_video = fpath.suffix.lower() in VIDEO_EXTS
+                    
+                    if is_video:
+                        img = self.extract_video_frame(fpath)
+                        if img is None:
+                            print(f"Skipping video (could not extract frame): {fpath}")
+                            continue
+                    else:
+                        img = Image.open(fpath)
+                        img.load() 
+                        img = img.convert("RGB")
                     
                     thumb_path = self.generate_thumbnail(img, rel_path)
                     
@@ -100,7 +142,9 @@ class ImageIndexer:
                     metadatas.append({
                         "full_path": str(fpath),
                         "thumbnail_path": thumb_path,
-                        "filename": fpath.name
+                        "filename": fpath.name,
+                        "mtime": fpath.stat().st_mtime,
+                        "file_type": "video" if is_video else "image"
                     })
                 except Exception as e:
                     print(f"Error processing {fpath}: {e}")
