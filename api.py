@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pathlib import Path
 import torch
 from transformers import AutoModel, AutoTokenizer
@@ -16,6 +18,15 @@ MODEL_ID = "./model"
 DISTANCE_THRESHOLD = 0.7  # Cosine distance: 0 is identical, 1 is opposite. Lower is better.
 
 app = FastAPI(title="Local Semantic Image Search API")
+
+# Add CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For local use, allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup Global State
 class SearchEngine:
@@ -77,6 +88,10 @@ async def startup_event():
 if not os.path.exists(THUMBNAIL_PATH):
     os.makedirs(THUMBNAIL_PATH, exist_ok=True)
 app.mount("/thumbnails", StaticFiles(directory=THUMBNAIL_PATH), name="thumbnails")
+
+@app.get("/")
+async def get_index():
+    return FileResponse("index.html")
 
 @app.get("/search")
 async def search(q: str = Query(..., description="The semantic search query"), 
