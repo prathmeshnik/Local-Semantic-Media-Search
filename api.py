@@ -9,14 +9,27 @@ import chromadb
 import uvicorn
 import os
 import mimetypes
+from huggingface_hub import snapshot_download
 
 from embedding_utils import Qwen3VLEmbedder
 
 # Configuration
 DB_PATH = "./.db"
 THUMBNAIL_PATH = "./.cache/thumbnails"
-MODEL_ID = "./model"
+MODEL_ID = "./Qwen/Qwen3-VL-Embedding-2B"
+HF_MODEL_ID = "Qwen/Qwen3-VL-Embedding-2B"
 DISTANCE_THRESHOLD = 0.7  # Cosine distance: 0 is identical, 1 is opposite. Lower is better.
+
+def ensure_model():
+    """Checks if the local model directory exists and contains files. If not, downloads from HF."""
+    model_path = Path(MODEL_ID)
+    if not model_path.exists() or not any(model_path.iterdir()):
+        print(f"Model not found in {MODEL_ID}. Downloading {HF_MODEL_ID} from Hugging Face...")
+        snapshot_download(
+            repo_id=HF_MODEL_ID,
+            local_dir=MODEL_ID,
+            local_dir_use_symlinks=False
+        )
 
 app = FastAPI(title="Local Semantic Image Search API")
 
@@ -83,6 +96,7 @@ engine = None
 @app.on_event("startup")
 async def startup_event():
     global engine
+    ensure_model()
     engine = SearchEngine()
 
 # Mount Static Files for Thumbnails

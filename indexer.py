@@ -7,6 +7,7 @@ import chromadb
 from tqdm import tqdm
 import hashlib
 import cv2
+from huggingface_hub import snapshot_download
 from pillow_heif import register_heif_opener
 
 from embedding_utils import Qwen3VLEmbedder
@@ -20,7 +21,21 @@ THUMBNAIL_PATH = "./.cache/thumbnails"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif", ".tiff", ".tif"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".webm", ".mkv"}
 SUPPORTED_EXTS = IMAGE_EXTS | VIDEO_EXTS
-MODEL_ID = "./model"
+MODEL_ID = "./Qwen/Qwen3-VL-Embedding-2B"
+HF_MODEL_ID = "Qwen/Qwen3-VL-Embedding-2B"
+
+def ensure_model():
+    """Checks if the local model directory exists and contains files. If not, downloads from HF."""
+    model_path = Path(MODEL_ID)
+    if not model_path.exists() or not any(model_path.iterdir()):
+        print(f"Model not found in {MODEL_ID}. Downloading {HF_MODEL_ID} from Hugging Face...")
+        print("This may take a while (approx. 4GB)...")
+        snapshot_download(
+            repo_id=HF_MODEL_ID,
+            local_dir=MODEL_ID,
+            local_dir_use_symlinks=False
+        )
+        print("Download complete.")
 
 def get_device():
     if torch.cuda.is_available():
@@ -171,5 +186,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch", type=int, default=8, help="Batch size for indexing")
     args = parser.parse_args()
 
+    ensure_model()
     indexer = ImageIndexer(args.path)
     indexer.index(batch_size=args.batch)

@@ -9,6 +9,7 @@ vault/
 images/
 data/
 model/
+Qwen/
 
 # Persistent Data & Cache
 .db/
